@@ -19,11 +19,11 @@ TARGET_DIR = Path("/opt/airflow/data")
 
 WATERMARK_DIR = Path("/opt/airflow/data/watermark")
 
-TABLE_NAME = 'states'
+TABLE_NAME = 'salesperson'
 
 LOAD_TYPE = 'overwrite' # Full load
 
-SQL_QUERY = '''SELECT id_estados, estado, sigla, data_inclusao, data_atualizacao FROM public.estados;'''
+SQL_QUERY = '''SELECT id_vendedores, nome, id_concessionarias, data_inclusao, data_atualizacao FROM public.vendedores;'''
 
 WATERMARK = datetime.datetime.utcnow()
 
@@ -31,7 +31,7 @@ TABLE_PATH = (TARGET_DIR / TABLE_NAME)
 
 FILE_PATH = f"{TARGET_DIR}/{TABLE_NAME}/batch_{WATERMARK.strftime("%Y%m%d%H%M%S")}.parquet"
 
-DATASET = Dataset("/opt/airflow/data/states/")
+DATASET = Dataset("/opt/airflow/data/salesperson/")
 
 
 DEFAULT_ARGUMENTS = {
@@ -44,13 +44,13 @@ DEFAULT_ARGUMENTS = {
 }
 
 with DAG(
-    dag_id="raw_states",
-    description="copy states table from database",
+    dag_id="raw_salesperson",
+    description="copy salesperson table from database",
     schedule=None,
     default_args=DEFAULT_ARGUMENTS,
     start_date=pendulum.datetime(2026,1,1,tz="America/Sao_Paulo"),
     catchup=False,
-    tags=["raw","postgre","states","dimension", "full load"]
+    tags=["raw","postgre","salesperson","dimension", "full load"]
 ) as dag:
     
     init_task = BashOperator(task_id="init_task", bash_command="echo Starting")

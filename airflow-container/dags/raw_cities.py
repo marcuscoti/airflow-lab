@@ -5,7 +5,7 @@ from pathlib import Path
 import datetime
 import pendulum
 import pandas as pd
-from airflow import DAG
+from airflow import DAG, Dataset
 from airflow.sdk import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.common.sql.operators.sql import SQLTableCheckOperator, SQLColumnCheckOperator
@@ -33,7 +33,7 @@ TABLE_PATH = (TARGET_DIR / TABLE_NAME)
 
 FILE_PATH = f"{TARGET_DIR}/{TABLE_NAME}/batch_{WATERMARK.strftime("%Y%m%d%H%M%S")}.parquet"
 
-
+DATASET = Dataset("/opt/airflow/data/cities/")
 
 DEFAULT_ARGUMENTS = {
     "execution_timeout": datetime.timedelta(seconds=7200),
@@ -70,7 +70,7 @@ with DAG(
             print("Folder does not exist or is not a directory.")
 
 
-    @task()
+    @task(outlets=[DATASET])
     def copy_from_source() -> None:
         TABLE_PATH.mkdir(parents=True, exist_ok=True)
         hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)

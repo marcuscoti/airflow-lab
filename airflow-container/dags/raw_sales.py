@@ -5,7 +5,7 @@ from pathlib import Path
 import datetime
 import pendulum
 import pandas as pd
-from airflow import DAG
+from airflow import DAG, Dataset
 from airflow.sdk import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.common.sql.operators.sql import SQLTableCheckOperator, SQLColumnCheckOperator
@@ -46,7 +46,9 @@ WATERMARK = datetime.datetime.utcnow()
 
 TABLE_PATH = (TARGET_DIR / TABLE_NAME)
 
-FILE_PATH = f"{TARGET_DIR}/{TABLE_NAME}/batch_{WATERMARK.strftime("%Y%m%d%H%M%S")}.parquet"
+FILE_PATH = f"{TARGET_DIR}/{TABLE_NAME}/sales_batch_{WATERMARK.strftime("%Y%m%d%H%M%S")}.parquet"
+
+DATASET = Dataset("/opt/airflow/data/sales/")
 
 
 DEFAULT_ARGUMENTS = {
@@ -80,42 +82,30 @@ with DAG(
     tags=["raw","postgre","sales","fact", "inc load"]
 ) as dag:
     
-    init_task = BashOperator(task_id="init_task", bash_command="echo Starting")
-
+    #init_task = BashOperator(task_id="init_task", bash_command="echo Starting")
 
     @task
     def clear_target_folder() -> None:
         context = get_current_context()
         ti = context['ti']
-
         if os.path.exists(TABLE_PATH) and os.path.isdir(TABLE_PATH):
             shutil.rmtree(TABLE_PATH)
         else:
             ti.xcom_push(key='Error', value="Folder does not exist or is not a directory.")
             print("Folder does not exist or is not a directory.")
 
+    @task(outlets=[DATASET])
+    def copy_data_from_source() -> None:
+        context = get_current_context()
+        ti = context['ti']
+        load_type = ti.xcom_pull(key='load_type', task_ids='check_load_type')  
 
-    @task
-    def copy_from_source_incremental() -> None:
         TABLE_PATH.mkdir(parents=True, exist_ok=True)
         hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
-        watermark = _load_watermark()
-        print(f"Watermark: {watermark}")
-        
-        transformed_sql_query = SQL_QUERY.replace("{watermark}", watermark)
-        print(f"SQL QUERY: {transformed_sql_query}")
-        df = hook.get_df(transformed_sql_query)
-        df.to_parquet(FILE_PATH, index=False, engine='pyarrow')
-
-    
-    @task
-    def copy_from_source_full() -> None:
-        TABLE_PATH.mkdir(parents=True, exist_ok=True)
-        hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
-        
-        #watermark = _load_watermark()
-
-        watermark = str(WATERMARK + datetime.timedelta(days=-365))
+        if load_type == 'incremental':
+            watermark = _load_watermark()
+        else:
+            watermark = str(WATERMARK + datetime.timedelta(days=-365))
         print(f"Watermark: {watermark}")
         
         transformed_sql_query = SQL_QUERY.replace("{watermark}", watermark)
@@ -126,9 +116,7 @@ with DAG(
 
     @task
     def write_watermark() -> None:
-
         WATERMARK_DIR.mkdir(parents=True, exist_ok=True)
-
         json_file = WATERMARK_DIR / f"{TABLE_NAME}.json"
 
         d = {"table": str(TABLE_NAME),
@@ -158,14 +146,11 @@ with DAG(
         return 'empty_task'
     
 
-
     empty_task = EmptyOperator(task_id="empty_task")
-
     join_task = EmptyOperator(task_id="join_task", trigger_rule="none_failed_min_one_success")
-
     branch_result = branch_task()
 
-    init_task >> check_load_type() >> branch_result
-    branch_result >> empty_task >> copy_from_source_incremental() >> join_task
-    branch_result >> clear_target_folder() >> copy_from_source_full() >> join_task
-    join_task >> write_watermark()
+    check_load_type() >> branch_result
+    branch_result >> empty_task  >> join_task
+    branch_result >> clear_target_folder() >> join_task
+    join_task >> copy_data_from_source() >> write_watermark()
