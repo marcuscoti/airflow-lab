@@ -23,11 +23,11 @@ ADLS_CONN_ID = 'az_blob_raw'
 
 DATA_DIR = "/opt/airflow/data"
 
-TABLE_NAME = 'sales'
+TABLE_NAME = 'stores'
 
 CONTAINER_NAME = "raw"
 
-DATASET = Dataset(f"{DATA_DIR}/sales/")
+DATASET = Dataset(f"{DATA_DIR}/stores/")
 
 DEFAULT_ARGUMENTS = {
     "execution_timeout": datetime.timedelta(seconds=7200),
@@ -40,13 +40,13 @@ DEFAULT_ARGUMENTS = {
 
 
 with DAG(
-    dag_id="adls_sync_sales_data",
+    dag_id="adls_sync_stores_data",
     description="Sync PARQUET files to ADLS",
     schedule=[DATASET],
     default_args=DEFAULT_ARGUMENTS,
     start_date=pendulum.datetime(2026,1,1,tz="America/Sao_Paulo"),
     catchup=False,
-    tags=["raw","ADLS","sales","fact", "inc load"]
+    tags=["raw","ADLS","stores","dim", "inc load"]
 ) as dag:
     
 
