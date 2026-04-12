@@ -48,7 +48,7 @@ DEFAULT_ARGUMENTS = {
 with DAG(
     dag_id="raw_cities",
     description="copy cities table from database",
-    schedule=None,
+    schedule="@daily",
     default_args=DEFAULT_ARGUMENTS,
     start_date=pendulum.datetime(2026,1,1,tz="America/Sao_Paulo"),
     catchup=False,
